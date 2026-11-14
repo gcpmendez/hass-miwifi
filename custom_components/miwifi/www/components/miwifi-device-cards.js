@@ -606,8 +606,9 @@ class MiWiFiDeviceCards extends LitElement {
     if (event.key === "Escape") this._renaming = null;
   }
 
-  // Writes the name to the entity and device registries, like HA's own
-  // rename dialogs. An empty name restores the integration-provided one.
+  // Writes the name to the device registry when the tracker belongs to a
+  // device, otherwise to the entity registry. An empty name restores the
+  // integration-provided one.
   async _rename(device, value) {
     if (this._renaming !== device.entity_id || !this.hass?.user?.is_admin
       || this._renamePending.has(device.entity_id)) return;
@@ -618,7 +619,13 @@ class MiWiFiDeviceCards extends LitElement {
     this._renameError = "";
     try {
       const entry = await this.hass.callWS({ type: "config/entity_registry/get", entity_id: device.entity_id });
-      const result = await this.hass.callWS({ type: "config/entity_registry/update", entity_id: device.entity_id, name });
+      // HA builds the tracker's friendly name as "<device name> <entity name>",
+      // so writing the name to both registries shows it twice ("Termo Termo").
+      // With a device, keep the name on the device only and give the entity an
+      // empty name (""), which HA treats as "no entity part"; null restores the
+      // integration-provided name on both.
+      const entityName = entry?.device_id && name !== null ? "" : name;
+      const result = await this.hass.callWS({ type: "config/entity_registry/update", entity_id: device.entity_id, name: entityName });
       if (entry?.device_id) {
         await this.hass.callWS({ type: "config/device_registry/update", device_id: entry.device_id, name_by_user: name });
       }
